@@ -21,9 +21,9 @@ Callee cannot make a call to unsubscribe inside callback function.
 
 ## Build
 
-mkdir project_dir
-cd project_dir
-git clone 
+git clone https://github.com/shtuuch/multiqueue.git
+cd multiqueue
+git submodule update --init --recursive
 mkdir build
 cd build
 cmake ..
