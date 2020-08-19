@@ -9,7 +9,7 @@ Class implements multiqueue broker which allows following operations:
 
 Broker invokes subscribers' callbacks asynchroniously. Round robin algorithm is used to select next Value if there are multiple subscribers on different Keys
 
-##Limitations
+## Limitations
 
 Callee cannot make a call to unsubscribe inside callback function.
 
@@ -20,7 +20,7 @@ Callee cannot make a call to unsubscribe inside callback function.
 - active_partitions list may use intusive containers from Boost. This would allow not to allocate memory on heap just to store pointers.
 
 ## Build
-
+```
 git clone https://github.com/shtuuch/multiqueue.git
 cd multiqueue
 git submodule update --init --recursive
@@ -28,4 +28,4 @@ mkdir build
 cd build
 cmake ..
 cmake --build .
-
+```
