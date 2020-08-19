@@ -12,13 +12,13 @@ struct _x_ : public _base_                         \
     }                                              \
 }
 
-namespace solution
+namespace Solution
 {
 
-DEFINE_ERROR(exception, std::runtime_error);
+DEFINE_ERROR(Exception, std::runtime_error);
 
-DEFINE_ERROR(broker_error, exception);
+DEFINE_ERROR(BrokerError, Exception);
 
-DEFINE_ERROR(partition_error, exception);
+DEFINE_ERROR(PartitionError, Exception);
 
 }

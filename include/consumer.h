@@ -4,16 +4,16 @@
 #include <thread>
 #include <mutex>
 
-namespace solution
+namespace Solution
 {
 
 template<typename Key, typename Value>
-class consumer
+class IConsumer
 {
 public:
     virtual void consume(const Key &, const Value &) const = 0;
 
-    virtual ~consumer()
+    virtual ~IConsumer()
     {};
 };
 

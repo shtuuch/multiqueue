@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-class string_consumer : public solution::consumer<int, std::string>
+class StringConsumer : public Solution::IConsumer<int, std::string>
 {
 public:
     void consume(const int &key, const std::string &value) const override
@@ -15,8 +15,8 @@ public:
 int main()
 {
     try {
-        solution::broker<int, std::string> broker(10);
-        string_consumer consumer;
+        Solution::Broker<int, std::string> broker(10);
+        StringConsumer consumer;
         broker.subscribe(10, consumer);
 
         broker.push(10, "value1");
@@ -25,8 +25,8 @@ int main()
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-    catch (const solution::broker_error &e) {
-        solution::logger::debug() << e;
+    catch (const Solution::BrokerError &e) {
+        Solution::Logger::debug() << e;
     }
 
     return 0;

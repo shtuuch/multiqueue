@@ -1,26 +1,26 @@
 #pragma once
 
-#include "broker_exception.h"
+#include "exception.h"
 
 #include <iostream>
 
-namespace solution
+namespace Solution
 {
 namespace
 {
 
-void print_exception(std::ostream &stream, const std::exception &e, int level = 0)
+void printException(std::ostream &stream, const std::exception &e, int level = 0)
 {
     stream << std::string(level, ' ') << "exception: " << e.what() << std::endl;
     try {
         std::rethrow_if_nested(e);
     } catch (const std::exception &e) {
-        print_exception(stream, e, level + 1);
+        printException(stream, e, level + 1);
     } catch (...) {}
 }
 }
 
-class logger
+class Logger
 {
 public:
    static std::ostream &debug()
@@ -29,9 +29,9 @@ public:
    }
 };
 
-std::ostream &operator << (std::ostream &stream, const broker_error &e)
+std::ostream &operator << (std::ostream &stream, const BrokerError &e)
 {
-    print_exception(stream, e);
+    printException(stream, e);
     return stream;
 }
 

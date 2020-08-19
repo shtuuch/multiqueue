@@ -1,7 +1,7 @@
 #pragma once
 
-#include "broker_exception.h"
-#include "partition_manager.h"
+#include "exception.h"
+#include "partitionmanager.h"
 #include "consumer.h"
 #include "logger.h"
 
@@ -13,98 +13,98 @@
 #include <mutex>
 #include <atomic>
 
-namespace solution
+namespace Solution
 {
 
 template <typename Key, typename Value>
-class broker
+class Broker
 {
-using consumer_type = consumer<Key, Value>;
-using consumer_collection = std::set<const consumer_type *>;
+using ConsumerType = IConsumer<Key, Value>;
+using ConsumerCollection = std::set<const ConsumerType *>;
 
 public:
-    broker(size_t max_size);
+    Broker(size_t maxSize);
 
-    ~broker();
+    ~Broker();
 
 	template <typename ...Args>
 	void push(const Key &key, Args && ...args);
 
-	void subscribe(const Key &key, const consumer_type &consumer);
+	void subscribe(const Key &key, const ConsumerType &consumer);
 
-	void unsubscribe(const Key &key, const consumer_type &consumer);
+	void unsubscribe(const Key &key, const ConsumerType &consumer);
 
 private:
-	void thread_proc();
+	void threadProc();
 
-    partition_manager<Key, Value> _partition_manager;
+    PartitionManager<Key, Value> _partitionManager;
     std::atomic_bool _terminating;
-    std::thread _worker_thread;
+    std::thread _workerThread;
 };
 
 template<typename Key, typename Value>
-broker<Key, Value>::broker(size_t max_size)
-    : _partition_manager(max_size)
+Broker<Key, Value>::Broker(size_t maxSize)
+    : _partitionManager(maxSize)
     , _terminating(false)
-    , _worker_thread(std::bind(&broker::thread_proc, this))
+    , _workerThread(std::bind(&Broker::threadProc, this))
 {}
 
 template<typename Key, typename Value>
-broker<Key, Value>::~broker()
+Broker<Key, Value>::~Broker()
 {
     _terminating = true;
-    _partition_manager.cancel_wait();
-    _worker_thread.join();
+    _partitionManager.cancelWait();
+    _workerThread.join();
 }
 
 template<typename Key, typename Value>
 template<typename... Args>
-void broker<Key, Value>::push(const Key &key, Args &&... args)
+void Broker<Key, Value>::push(const Key &key, Args &&... args)
 {
-    _partition_manager.push(key, std::forward<Args>(args)...);
+    _partitionManager.push(key, std::forward<Args>(args)...);
 }
 
 template<typename Key, typename Value>
-void broker<Key, Value>::subscribe(const Key &key, const broker::consumer_type &consumer)
-{
-    try {
-        _partition_manager.subscribe(key, consumer);
-    }
-    catch (const broker_error &) {
-        std::throw_with_nested(broker_error("Failed to subscribe"));
-    }
-}
-
-template<typename Key, typename Value>
-void broker<Key, Value>::unsubscribe(const Key &key, const broker::consumer_type &consumer)
+void Broker<Key, Value>::subscribe(const Key &key, const Broker::ConsumerType &consumer)
 {
     try {
-        _partition_manager.unsubscribe(key, consumer);
+        _partitionManager.subscribe(key, consumer);
     }
-    catch (const broker_error &) {
-        std::throw_with_nested(broker_error("Failed to unsubscribe"));
+    catch (const BrokerError &) {
+        std::throw_with_nested(BrokerError("Failed to subscribe"));
     }
 }
 
 template<typename Key, typename Value>
-void broker<Key, Value>::thread_proc()
+void Broker<Key, Value>::unsubscribe(const Key &key, const Broker::ConsumerType &consumer)
+{
+    try {
+        _partitionManager.unsubscribe(key, consumer);
+    }
+    catch (const BrokerError &) {
+        std::throw_with_nested(BrokerError("Failed to unsubscribe"));
+    }
+}
+
+template<typename Key, typename Value>
+void Broker<Key, Value>::threadProc()
 {
     while (true) {
         try {
-            auto optional_value_data = _partition_manager.pop();
+            auto optionalValuContext = _partitionManager.pop();
 
             if (_terminating) {
                 break;
             }
 
-            const auto &value_data = optional_value_data.value();
+            const auto &valueContext = optionalValuContext.value();
 
-            for (const auto consumer: value_data.consumers) {
-                consumer->consume(value_data.key, value_data.value);
+            for (const auto consumer: valueContext.consumers) {
+                consumer->consume(valueContext.key, valueContext.value);
             }
         }
-        catch(const broker_error &e) {
-            logger::debug() << e;
+        catch(const BrokerError &e) {
+            Logger::debug() << e;
         }
     }
 }
