@@ -16,14 +16,16 @@ namespace Solution
 template <typename Key, typename Value>
 class PartitionManager
 {
-    using ConsumerType = IConsumer<Key, Value>;
-    using ConsumerList = std::set<const ConsumerType *>;
+    using ConsumerWeak = std::weak_ptr<IConsumer<Key, Value>>;
+    using ConsumerShared = std::shared_ptr<IConsumer<Key, Value>>;
+    using ConsumerSetWeak = std::set<ConsumerWeak, std::owner_less<ConsumerWeak>>;
+    using ConsumerVectorShared = std::vector<ConsumerShared>;
 
     struct Partition
     {
-        Key key;
+        Key key; //Optimization: could be const reference
         std::queue<Value> queue;
-        ConsumerList consumers;
+        ConsumerSetWeak consumers;
         bool isActive = false;
     };
 
@@ -34,11 +36,10 @@ public:
 
     struct ValueContext
     {
-        ValueContext(const Key &key, Value &&value, const ConsumerList &consumers, std::mutex &executionMutex)
+        ValueContext(const Key &key, Value &&value, ConsumerVectorShared &&consumers)
             : key(key)
             , value(value)
             , consumers(consumers)
-            , executionLock(executionMutex)
         {}
 
         ValueContext(const ValueContext &) = delete;
@@ -47,11 +48,10 @@ public:
 
         const Key &key;
         Value value;
-        ConsumerList consumers;
-        std::unique_lock<std::mutex> executionLock;
+        ConsumerVectorShared consumers;
     };
 
-    PartitionManager(size_t totalMaxSize);
+    explicit PartitionManager(size_t totalMaxSize);
 
 	template <typename ...Args>
 	void push(const Key &key, Args && ...args);
@@ -60,15 +60,19 @@ public:
 
     void cancelWait();
 
-	void subscribe(const Key &key, const ConsumerType &consumer);
+	void subscribe(const Key &key, const ConsumerWeak &consumer);
 
-	void unsubscribe(const Key &key, const ConsumerType &consumer);
+	void unsubscribe(const Key &key, const ConsumerWeak &consumer);
 
 private:
 
-	void addConsumer(Partition &partition, const ConsumerType &consumer);
+    std::optional<ValueContext> pop_internal();
 
-	void removeConsumer(Partition &partition, const ConsumerType &consumer);
+    ConsumerVectorShared validateConsumersAndLock(ConsumerSetWeak &consumersWeak);
+
+	void addConsumer(Partition &partition, const ConsumerWeak &consumer);
+
+	void removeConsumer(Partition &partition, const ConsumerWeak &consumer);
 
 	void removeFromActive(Partition &partition);
 
@@ -81,7 +85,6 @@ private:
 	ActivePartitionIterator _currentPartition;
 
     std::mutex _mutex;
-    std::mutex _executionMutex;
     std::condition_variable _cv;
 
     const size_t _totalMaxSize;
@@ -140,39 +143,17 @@ void PartitionManager<Key, Value>::push(const Key &key, Args &&... args)
 template<typename Key, typename Value>
 optionalValueContext<Key, Value> PartitionManager<Key, Value>::pop()
 {
-    try {
-        std::unique_lock lock(_mutex);
-        _cv.wait(lock, [this] { return !_activePartitions.empty() || _isWaitCanceled; });
+    while(true) {
+        auto valueContext = pop_internal();
 
         if (_isWaitCanceled) {
             _isWaitCanceled = false;
             return std::nullopt;
         }
 
-        if (_currentPartition == _activePartitions.end()) {
-            _currentPartition = _activePartitions.begin();
+        if (valueContext != std::nullopt) {
+            return valueContext;
         }
-
-        auto &partition = *_currentPartition;
-        auto &queue = partition->queue;
-        std::optional<ValueContext> valueContext(std::in_place,
-                                                 partition->key,
-                                                 std::move(queue.front()),
-                                                 partition->consumers,
-                                                 _executionMutex);
-        queue.pop();
-        --_totalSize;
-
-        if (queue.empty()) {
-            removeFromActive(_currentPartition++);
-        } else {
-            ++_currentPartition;
-        }
-
-        return valueContext;
-    }
-    catch(const std::exception &) {
-        std::throw_with_nested(PartitionError("Failed to pop value"));
     }
 }
 
@@ -188,7 +169,7 @@ void PartitionManager<Key, Value>::cancelWait()
 
 template<typename Key, typename Value>
 void PartitionManager<Key, Value>::subscribe(const Key &key,
-                                             const PartitionManager::ConsumerType &consumer)
+                                             const PartitionManager::ConsumerWeak &consumer)
 {
     try {
         std::unique_lock lock(_mutex);
@@ -211,10 +192,10 @@ void PartitionManager<Key, Value>::subscribe(const Key &key,
 
 template<typename Key, typename Value>
 void PartitionManager<Key, Value>::unsubscribe(const Key &key,
-                                               const PartitionManager::ConsumerType &consumer)
+                                               const PartitionManager::ConsumerWeak &consumer)
 {
     try {
-        std::scoped_lock lock(_mutex, _executionMutex);
+        std::lock_guard lock(_mutex);
 
         auto it = _partitions.find(key);
         if (it == _partitions.end()) {
@@ -239,21 +220,86 @@ void PartitionManager<Key, Value>::unsubscribe(const Key &key,
 }
 
 template<typename Key, typename Value>
+optionalValueContext<Key, Value> PartitionManager<Key, Value>::pop_internal()
+{
+    try {
+        std::unique_lock lock(_mutex);
+        _cv.wait(lock, [this] { return !_activePartitions.empty() || _isWaitCanceled; });
+
+        if (_isWaitCanceled) {
+            return std::nullopt;
+        }
+
+        if (_currentPartition == _activePartitions.end()) {
+            _currentPartition = _activePartitions.begin();
+        }
+
+        auto &partition = *(*_currentPartition);
+        auto &queue = partition.queue;
+
+        auto &consumers = partition.consumers;
+        auto consumersShared = validateConsumersAndLock(consumers);
+
+        if (consumers.empty()) {
+            removeFromActive(_currentPartition++);
+            return std::nullopt;
+        }
+
+        std::optional<ValueContext> valueContext(std::in_place,
+                                                 partition.key,
+                                                 std::move(queue.front()),
+                                                 std::move(consumersShared));
+        queue.pop();
+        --_totalSize;
+
+        auto prev = _currentPartition++;
+        if (queue.empty()) {
+            removeFromActive(prev);
+        }
+
+        return valueContext;
+    }
+    catch(const std::exception &) {
+        std::throw_with_nested(PartitionError("Failed to pop value"));
+    }
+}
+
+template<typename Key, typename Value>
+typename PartitionManager<Key, Value>::ConsumerVectorShared
+PartitionManager<Key, Value>::validateConsumersAndLock(ConsumerSetWeak &consumersWeak)
+{
+    ConsumerVectorShared consumersShared;
+    consumersShared.reserve(consumersWeak.size());
+
+    for (auto it = consumersWeak.begin(), e = consumersWeak.end(); it != e; ++it) {
+        auto shared = it->lock();
+        if (shared == nullptr) {
+            consumersWeak.erase(it);
+            continue;
+        }
+
+        consumersShared.push_back(std::move(shared));
+    }
+
+    return consumersShared;
+}
+
+template<typename Key, typename Value>
 void PartitionManager<Key, Value>::addConsumer(PartitionManager::Partition &partition,
-                                               const PartitionManager::ConsumerType &consumer)
+                                               const PartitionManager::ConsumerWeak &consumer)
 {
     auto &consumers = partition.consumers;
-    if (!consumers.insert(&consumer).second) {
+    if (!consumers.insert(consumer).second) {
         throw PartitionError("Consumer already registered for the key");
     }
 }
 
 template<typename Key, typename Value>
 void PartitionManager<Key, Value>::removeConsumer(PartitionManager::Partition &partition,
-                                                  const PartitionManager::ConsumerType &consumer)
+                                                  const PartitionManager::ConsumerWeak &consumer)
 {
     auto &consumers = partition.consumers;
-    auto it = consumers.find(&consumer);
+    auto it = consumers.find(consumer);
     if (it == consumers.end()) {
         throw PartitionError("Consumer not found");
     }

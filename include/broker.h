@@ -19,8 +19,8 @@ namespace Solution
 template <typename Key, typename Value>
 class Broker
 {
-using ConsumerType = IConsumer<Key, Value>;
-using ConsumerCollection = std::set<const ConsumerType *>;
+using ConsumerWeak = std::weak_ptr<IConsumer<Key, Value>>;
+using ConsumerShared = std::shared_ptr<IConsumer<Key, Value>>;
 
 public:
     Broker(size_t maxSize);
@@ -30,9 +30,12 @@ public:
 	template <typename ...Args>
 	void push(const Key &key, Args && ...args);
 
-	void subscribe(const Key &key, const ConsumerType &consumer);
+	void subscribe(const Key &key, const ConsumerWeak &consumer);
 
-	void unsubscribe(const Key &key, const ConsumerType &consumer);
+    template<typename ConsumerType,
+        typename = std::enable_if_t<!std::is_same_v<ConsumerType, typename Broker<Key, Value>::ConsumerWeak> ||
+        !std::is_same_v<ConsumerType, typename Broker<Key, Value>::ConsumerShared>>>
+    void unsubscribe(const Key &key, const ConsumerType &consumer);
 
 private:
 	void threadProc();
@@ -65,7 +68,7 @@ void Broker<Key, Value>::push(const Key &key, Args &&... args)
 }
 
 template<typename Key, typename Value>
-void Broker<Key, Value>::subscribe(const Key &key, const Broker::ConsumerType &consumer)
+void Broker<Key, Value>::subscribe(const Key &key, const Broker::ConsumerWeak &consumer)
 {
     try {
         _partitionManager.subscribe(key, consumer);
@@ -76,7 +79,8 @@ void Broker<Key, Value>::subscribe(const Key &key, const Broker::ConsumerType &c
 }
 
 template<typename Key, typename Value>
-void Broker<Key, Value>::unsubscribe(const Key &key, const Broker::ConsumerType &consumer)
+template<typename ConsumerType, typename>
+void Broker<Key, Value>::unsubscribe(const Key &key, const ConsumerType &consumer)
 {
     try {
         _partitionManager.unsubscribe(key, consumer);
@@ -91,15 +95,15 @@ void Broker<Key, Value>::threadProc()
 {
     while (true) {
         try {
-            auto optionalValuContext = _partitionManager.pop();
+            auto optionalValueContext = _partitionManager.pop();
 
             if (_terminating) {
                 break;
             }
 
-            const auto &valueContext = optionalValuContext.value();
+            const auto &valueContext = optionalValueContext.value();
 
-            for (const auto consumer: valueContext.consumers) {
+            for (const auto &consumer: valueContext.consumers) {
                 consumer->consume(valueContext.key, valueContext.value);
             }
         }

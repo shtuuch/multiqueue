@@ -7,20 +7,19 @@ Class implements multiqueue broker which allows following operations:
 - subscribe on Values corresponding to the Key
 - unsubscribe from further callbacks invocations
 
-Broker invokes subscribers' callbacks asynchroniously. Round robin algorithm is used to select next Value if there are multiple subscribers on different Keys
+Broker invokes subscribers' callbacks asynchronously. Round robin algorithm is used to select next Value if there are multiple subscribers on different Keys
 
-## Limitations
+##Limitations
 
-Callee cannot make a call to unsubscribe inside callback function.
+Call to unsubscribe inside callback will succeed but the all consumers for the value will be called.
 
-## Futher enhancement
+## Further enhancement
 
 - Provide different Key selection strategies (beside round robin)
-- Though unsubscribe is not supposed to be called often, still it may use not such a broad locking stategy and block only those consumers whose callback is currently being called.
-- active_partitions list may use intusive containers from Boost. This would allow not to allocate memory on heap just to store pointers.
+- active_partitions list may use intrusive containers from Boost. This would allow not to allocate memory on heap just to store pointers.
 
 ## Build
-```
+
 git clone https://github.com/shtuuch/multiqueue.git
 cd multiqueue
 git submodule update --init --recursive
@@ -28,4 +27,4 @@ mkdir build
 cd build
 cmake ..
 cmake --build .
-```
+
