@@ -21,7 +21,7 @@ struct mockConsumer : public Solution::IConsumer<int, std::string>
 // Tests are very basic.
 // Multithreaded tests are not implemented in the scope of the assessment task.
 
-TEST(brokerTest, consume)
+TEST(BrokerTest, consume)
 {
     auto stringConsumer = std::make_shared<mockConsumer<int, std::string>>();
 
@@ -44,7 +44,7 @@ TEST(brokerTest, consume)
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(broker_test, unsubscribe)
+TEST(BrokerTest, unsubscribe)
 {
     auto stringConsumer = std::make_shared<mockConsumer<int, std::string>>();
 
@@ -68,7 +68,7 @@ TEST(broker_test, unsubscribe)
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(broker_test, unsubscribe_inside_callback)
+TEST(BrokerTest, unsubscribeInsideCallback)
 {
     auto stringConsumer1 = std::make_shared<mockConsumer<int, std::string>>();
     auto stringConsumer2 = std::make_shared<mockConsumer<int, std::string>>();
@@ -91,7 +91,7 @@ TEST(broker_test, unsubscribe_inside_callback)
     std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
-TEST(broker_test, consumer_reset_inside_callback)
+TEST(BrokerTest, consumerResetInsideCallback)
 {
     auto stringConsumer1 = std::make_shared<mockConsumer<int, std::string>>();
     auto stringConsumer2 = std::make_shared<mockConsumer<int, std::string>>();

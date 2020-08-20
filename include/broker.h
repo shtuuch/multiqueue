@@ -21,9 +21,12 @@ class Broker
 {
 using ConsumerWeak = std::weak_ptr<IConsumer<Key, Value>>;
 using ConsumerShared = std::shared_ptr<IConsumer<Key, Value>>;
+template <typename T>
+using EnableIfConsumerPtr = std::enable_if_t<std::is_convertible_v<T, ConsumerWeak> ||
+                                             std::is_convertible_v<T, ConsumerShared>>;
 
 public:
-    Broker(size_t maxSize);
+    explicit Broker(size_t maxSize);
 
     ~Broker();
 
@@ -32,9 +35,7 @@ public:
 
 	void subscribe(const Key &key, const ConsumerWeak &consumer);
 
-    template<typename ConsumerType,
-        typename = std::enable_if_t<!std::is_same_v<ConsumerType, typename Broker<Key, Value>::ConsumerWeak> ||
-        !std::is_same_v<ConsumerType, typename Broker<Key, Value>::ConsumerShared>>>
+    template<typename ConsumerType, typename = EnableIfConsumerPtr<ConsumerType>>
     void unsubscribe(const Key &key, const ConsumerType &consumer);
 
 private:

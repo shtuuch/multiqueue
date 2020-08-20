@@ -15,8 +15,9 @@ Call to unsubscribe inside callback will succeed but all consumers for the value
 
 ## Further enhancement
 
-- Provide different Key selection strategies (beside round robin)
+- Provide different Key selection strategies (beside round robin).
 - active_partitions list may use intrusive containers from Boost. This would allow not to allocate memory on heap just to store pointers.
+- Use more than one worker thread
 
 ## Build
 

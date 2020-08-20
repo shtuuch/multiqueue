@@ -66,7 +66,7 @@ public:
 
 private:
 
-    std::optional<ValueContext> pop_internal();
+    std::optional<ValueContext> popInternal();
 
     ConsumerVectorShared validateConsumersAndLock(ConsumerSetWeak &consumersWeak);
 
@@ -144,12 +144,15 @@ template<typename Key, typename Value>
 optionalValueContext<Key, Value> PartitionManager<Key, Value>::pop()
 {
     while(true) {
-        auto valueContext = pop_internal();
+        std::unique_lock lock(_mutex);
+        _cv.wait(lock, [this] { return !_activePartitions.empty() || _isWaitCanceled; });
 
         if (_isWaitCanceled) {
             _isWaitCanceled = false;
             return std::nullopt;
         }
+
+        auto valueContext = popInternal();
 
         if (valueContext != std::nullopt) {
             return valueContext;
@@ -220,16 +223,9 @@ void PartitionManager<Key, Value>::unsubscribe(const Key &key,
 }
 
 template<typename Key, typename Value>
-optionalValueContext<Key, Value> PartitionManager<Key, Value>::pop_internal()
+optionalValueContext<Key, Value> PartitionManager<Key, Value>::popInternal()
 {
     try {
-        std::unique_lock lock(_mutex);
-        _cv.wait(lock, [this] { return !_activePartitions.empty() || _isWaitCanceled; });
-
-        if (_isWaitCanceled) {
-            return std::nullopt;
-        }
-
         if (_currentPartition == _activePartitions.end()) {
             _currentPartition = _activePartitions.begin();
         }
