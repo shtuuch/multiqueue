@@ -9,9 +9,9 @@ Class implements multiqueue broker which allows following operations:
 
 Broker invokes subscribers' callbacks asynchronously. Round robin algorithm is used to select next Value if there are multiple subscribers on different Keys
 
-##Limitations
+## Limitations
 
-Call to unsubscribe inside callback will succeed but the all consumers for the value will be called.
+Call to unsubscribe inside callback will succeed but all consumers for the value will be called (if there were several consumers for the same Key)
 
 ## Further enhancement
 
