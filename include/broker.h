@@ -21,9 +21,6 @@ class Broker
 {
 using ConsumerWeak = std::weak_ptr<IConsumer<Key, Value>>;
 using ConsumerShared = std::shared_ptr<IConsumer<Key, Value>>;
-template <typename T>
-using EnableIfConsumerPtr = std::enable_if_t<std::is_convertible_v<T, ConsumerWeak> ||
-                                             std::is_convertible_v<T, ConsumerShared>>;
 
 public:
     explicit Broker(size_t maxSize);
@@ -35,7 +32,7 @@ public:
 
 	void subscribe(const Key &key, const ConsumerWeak &consumer);
 
-    template<typename ConsumerType, typename = EnableIfConsumerPtr<ConsumerType>>
+    template<typename ConsumerType>
     void unsubscribe(const Key &key, const ConsumerType &consumer);
 
 private:
@@ -80,9 +77,11 @@ void Broker<Key, Value>::subscribe(const Key &key, const Broker::ConsumerWeak &c
 }
 
 template<typename Key, typename Value>
-template<typename ConsumerType, typename>
+template<typename ConsumerType>
 void Broker<Key, Value>::unsubscribe(const Key &key, const ConsumerType &consumer)
 {
+    static_assert(std::is_convertible_v<ConsumerType, ConsumerWeak> ||
+                 std::is_convertible_v<ConsumerType, ConsumerShared>, "Should be shared_ptr or weak_ptr");
     try {
         _partitionManager.unsubscribe(key, consumer);
     }

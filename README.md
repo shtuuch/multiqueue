@@ -21,6 +21,7 @@ Call to unsubscribe inside callback will succeed but all consumers for the value
 
 ## Build
 
+```
 git clone https://github.com/shtuuch/multiqueue.git
 cd multiqueue
 git submodule update --init --recursive
@@ -28,4 +29,4 @@ mkdir build
 cd build
 cmake ..
 cmake --build .
-
+```
